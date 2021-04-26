@@ -39,6 +39,14 @@ class MemorizeDB:
         row = self.cursor.fetchall()
         return row[0][0]
 
+    def checkMovieByE_title(self, e_title):
+        sql = '''SELECT * FROM movie WHERE e_title = %s'''
+        self.cursor.execute(sql, e_title)
+        row = self.cursor.fetchall()
+        if len(row) > 0:
+            return True
+        else:
+            return False
 
     def dbClose(self):
         self.connection.close()
