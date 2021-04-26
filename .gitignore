@@ -1,2 +1,4 @@
 /venv
 .idea
+.properties
+mysql_auth.py

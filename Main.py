@@ -2,6 +2,7 @@ import os
 from CaptionInformation import *
 from Movie import *
 from DB import *
+import mysql_auth
 import math
 
 # xx:xx:xx --> xx:xx:xx 형식의 문자열을 [시작시간, 종료시간] 형태로 만들어 주는 함수
@@ -74,14 +75,17 @@ for filename in curlist:
         captionInfoList = movie.captionInfoList
         #자막 길이별로 정렬
         captionInfoList.sort(key = lambda x : len(x.caption))
+
+        #DB 접속 정보
+        login = mysql_auth.Info
         #DB 접속
-        db = MemorizeDB('root', 'dlflrh18', '127.0.0.1')
+        db = MemorizeDB(login["user"], login["passwd"] , login["host"])
         db.connect()
 
         #DB에 영화 정보 insert
         db.insertMovie(movie.k_title, movie.e_title)
         #영화 제목으로 영화 번호값을 얻는다
-        movie_id = db.getMovieIdByk_title(k_title=movie.k_title)
+        movie_id = db.getMovieIdByk_title( k_title = movie.k_title)
 
         for captionInfo in captionInfoList[math.ceil(len(captionInfoList)/2):]:
             captionInfo.movie_id = movie_id
