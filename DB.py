@@ -1,6 +1,7 @@
 import pymysql
 from CaptionInformation import *
 
+
 class MemorizeDB:
 
     def __init__(self, user, passwd, host):
@@ -15,22 +16,22 @@ class MemorizeDB:
 
     def connect(self):
         self.connection = pymysql.connect(
-        user = 'root',
-        passwd = 'dlflrh18',
-        host = '127.0.0.1',
-        db='memorize',
-        charset='utf8')
+            user=self.user,
+            passwd=self.passwd,
+            host=self.host,
+            db='memorize',
+            charset='utf8')
         self.cursor = self.connection.cursor(pymysql.cursors.Cursor)
 
-
-    def insertMovie(self, k_title, e_title):
-        sql = '''INSERT INTO movie (k_title,e_title) VALUES (%s,%s)'''
-        self.cursor.execute(sql, (k_title, e_title))
+    def insertMovie(self, movie):
+        sql = '''INSERT INTO movie (k_title,e_title, filepath, thumnail) VALUES (%s,%s,%s,%s)'''
+        self.cursor.execute(sql, (movie.k_title, movie.e_title, movie.filepath, movie.thumnail))
         self.connection.commit()
 
-    def insertCaption(self,captionInfo):
+    def insertCaption(self, captionInfo):
         sql = '''INSERT INTO caption(movie_id, start_second, end_second, caption) VALUES (%s, %s, %s, %s)'''
-        self.cursor.execute(sql, (captionInfo.movie_id, captionInfo.startSecond, captionInfo.endSecond, captionInfo.caption))
+        self.cursor.execute(sql,
+                            (captionInfo.movie_id, captionInfo.startSecond, captionInfo.endSecond, captionInfo.caption))
         self.connection.commit()
 
     def getMovieIdByk_title(self, k_title):
@@ -50,4 +51,3 @@ class MemorizeDB:
 
     def dbClose(self):
         self.connection.close()
-

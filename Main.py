@@ -25,7 +25,7 @@ def timeAnalysis(timeInfo, plus_time, minus_time):
 
     return [startSecond, endSecond]
 
-
+# 자막 정보를 받아 movie 객체를 반환해준다.
 def fileOpen(name):
     fileName = name.split(".")[0]
     file = open(name, "r", encoding="UTF8")
@@ -43,6 +43,8 @@ def fileOpen(name):
     # 자막 딜레이 체크
     plus_time = int(first_info[2])
     minus_time = int(first_info[3])
+    # 영화 포스터 링크
+    thumnail = first_info[4]
     del lines[0]
 
     for n in lines:
@@ -65,42 +67,58 @@ def fileOpen(name):
         # 자막 리스트에 자막 추가
         captionInfoList.append(CaptionInformation(num, timeInfo, caption))
 
-    movie = Movie(k_title, e_title, captionInfoList)
+    movie = Movie(k_title, e_title, captionInfoList, thumnail)
     return movie
 
+def insertMovie(movie, db):
+
+    # DB에 영화가 존재한다면 return
+    if db.checkMovieByE_title(movie.e_title):
+        return
+    # DB에 영화 정보 insert
+    db.insertMovie(movie)
+    # 영화 제목으로 영화 번호값을 얻는다
+    movie_id = db.getMovieIdByk_title(k_title=movie.k_title)
+
+    pattern = re.compile('[a-zA-Z. ]+')
+    for captionInfo in captionInfoList[math.ceil(len(captionInfoList) / 1.5):]:
+        # 정규식 검사
+        match = pattern.fullmatch(captionInfo.caption)
+        if match:
+            captionInfo.movie_id = movie_id
+            # [.] 제거
+            captionInfo.caption = captionInfo.caption.replace('.', '')
+            db.insertCaption(captionInfo)
+            print('[' + movie.e_title + '] ' + '[' + str(captionInfo.startSecond) + ':' + str(
+                captionInfo.endSecond) + '] :' + captionInfo.caption)
 
 curlist = os.listdir()
-for filename in curlist:
-    if filename.find(".srt") > -1:
-        # 파일 이름으로 영화 정보 가져옴
-        movie = fileOpen(filename)
-        # 영화 자막 파일 분리
-        captionInfoList = movie.captionInfoList
-        # 자막 길이별로 정렬
-        captionInfoList.sort(key=lambda x: len(x.caption))
+os.chdir('./Movie')
+movie_folders = os.listdir()
 
-        # DB 접속 정보
-        login = mysql_auth.Info
-        # DB 접속
-        db = MemorizeDB(login["user"], login["passwd"], login["host"])
-        db.connect()
-        # DB에 영화가 존재한다면 continue
-        if db.checkMovieByE_title(movie.e_title):
-            continue
-        # DB에 영화 정보 insert
-        db.insertMovie(movie.k_title, movie.e_title)
-        # 영화 제목으로 영화 번호값을 얻는다
-        movie_id = db.getMovieIdByk_title(k_title=movie.k_title)
+# DB 접속 정보
+login = mysql_auth.Info
+# DB 접속
+db = MemorizeDB(login["user"], login["passwd"], login["host"])
+db.connect()
 
-        pattern = re.compile('[a-zA-Z. ]+')
-        for captionInfo in captionInfoList[math.ceil(len(captionInfoList) / 1.5):]:
-            # 정규식 검사
-            match = pattern.fullmatch(captionInfo.caption)
-            if match:
-                captionInfo.movie_id = movie_id
-                # [.] 제거
-                captionInfo.caption = captionInfo.caption.replace('.', '')
-                db.insertCaption(captionInfo)
-                print('[' + movie.e_title + '] ' + '[' + str(captionInfo.startSecond) + ':' + str(
-                    captionInfo.endSecond) + '] :' + captionInfo.caption)
-        db.dbClose()
+for movie_folder in movie_folders:
+    os.chdir('./'+movie_folder)
+    files = os.listdir()
+    movie = None
+    filepath = None
+    for file in files:
+        if file.find(".srt") > -1:
+            # 파일 이름으로 영화 정보 가져옴
+            movie = fileOpen(file)
+            # 영화 자막 파일 분리
+            captionInfoList = movie.captionInfoList
+            # 자막 길이별로 정렬
+            captionInfoList.sort(key=lambda x: len(x.caption))
+        else:
+            filepath = os.getcwd() + '/' + file
+            filepath = filepath.replace('\\', '/')
+    movie.filepath = filepath
+    insertMovie(movie, db)
+    os.chdir('../')
+db.dbClose()
