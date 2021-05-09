@@ -6,3 +6,4 @@ class CaptionInformation:
         self.endSecond = timeInfo[1]
         self.caption = caption
         self.movie_id = -1
+        self.thumbnail = None

@@ -5,6 +5,8 @@ from DB import *
 import mysql_auth
 import math
 import re
+import numpy as np
+import cv2
 
 
 # xx:xx:xx --> xx:xx:xx 형식의 문자열을 [시작시간, 종료시간] 형태로 만들어 주는 함수
@@ -25,8 +27,9 @@ def timeAnalysis(timeInfo, plus_time, minus_time):
 
     return [startSecond, endSecond]
 
+
 # 자막 정보를 받아 movie 객체를 반환해준다.
-def fileOpen(name):
+def getMovieObject(name):
     fileName = name.split(".")[0]
     file = open(name, "r", encoding="UTF8")
     lines = file.readlines()
@@ -44,7 +47,7 @@ def fileOpen(name):
     plus_time = int(first_info[2])
     minus_time = int(first_info[3])
     # 영화 포스터 링크
-    thumnail = first_info[4]
+    thumbnail = first_info[4]
     del lines[0]
 
     for n in lines:
@@ -55,7 +58,7 @@ def fileOpen(name):
 
     captionInfoList = []
     for captionInfo in captionList:
-        # 자막
+        # 자막 넘버
         num = (captionInfo[0].strip(" "))
         # 자막 재생 시간을 구한다
         timeInfo = timeAnalysis(captionInfo[1].strip(" "), plus_time, minus_time)
@@ -67,30 +70,63 @@ def fileOpen(name):
         # 자막 리스트에 자막 추가
         captionInfoList.append(CaptionInformation(num, timeInfo, caption))
 
-    movie = Movie(k_title, e_title, captionInfoList, thumnail)
-    return movie
+    # 자막 길이별로 정렬
+    captionInfoList.sort(key=lambda x: len(x.caption))
 
-def insertMovie(movie, db):
-
-    # DB에 영화가 존재한다면 return
-    if db.checkMovieByE_title(movie.e_title):
-        return
-    # DB에 영화 정보 insert
-    db.insertMovie(movie)
-    # 영화 제목으로 영화 번호값을 얻는다
-    movie_id = db.getMovieIdByk_title(k_title=movie.k_title)
-
+    # 자막에 정규식 패턴 적용
+    shortCaptionList = []
     pattern = re.compile('[a-zA-Z. ]+')
     for captionInfo in captionInfoList[math.ceil(len(captionInfoList) / 1.5):]:
         # 정규식 검사
         match = pattern.fullmatch(captionInfo.caption)
         if match:
-            captionInfo.movie_id = movie_id
             # [.] 제거
             captionInfo.caption = captionInfo.caption.replace('.', '')
-            db.insertCaption(captionInfo)
-            print('[' + movie.e_title + '] ' + '[' + str(captionInfo.startSecond) + ':' + str(
-                captionInfo.endSecond) + '] :' + captionInfo.caption)
+            shortCaptionList.append(captionInfo)
+
+    movie = Movie(k_title, e_title, shortCaptionList, thumbnail)
+    return movie
+
+
+def insertMovie(movie, db):
+    # DB에 영화 정보 insert
+    db.insertMovie(movie)
+    # 영화 제목으로 영화 번호값을 얻는다
+    movie_id = db.getMovieIdByk_title(k_title=movie.k_title)
+
+    # DB에 자막 정보 저장
+    for captionInfo in movie.captionInfoList:
+        captionInfo.movie_id = movie_id
+        db.insertCaption(captionInfo)
+        print(movie.e_title + ": [" + str(captionInfo.startSecond) + "] [" + str(
+            captionInfo.endSecond) + "] - " + captionInfo.caption)
+
+
+def makeStillCutImage(movie, onlyMainStillCut=False):
+    # 영화 객체 가져오기
+    videoObj = cv2.VideoCapture(movie.filepath)
+
+    # 영화의 프레임
+    fps = videoObj.get(cv2.CAP_PROP_FPS)
+
+    frameCount = 0
+
+    for captionInfo in movie.captionInfoList:
+        # 자막 시작점의 화면 가져오기
+        videoObj.set(cv2.CAP_PROP_POS_FRAMES, fps * captionInfo.startSecond)
+
+        ret, frame = videoObj.read()
+
+        # 썸네일 크기 조정 16:9
+        resizeImage = cv2.resize(frame, (228, 128))
+        # 썸네일 저장
+        cv2.imwrite("./thumbnail/%d.jpg" % frameCount, resizeImage)
+        # 자막 정보에 썸네일 경로 입력
+        captionInfo.thumbnail = (os.getcwd() + "/thumbnail/" + str(frameCount) + ".jpg").replace("\\", "/")
+        frameCount += 1
+
+    return movie
+
 
 curlist = os.listdir()
 os.chdir('./Movie')
@@ -103,22 +139,24 @@ db = MemorizeDB(login["user"], login["passwd"], login["host"])
 db.connect()
 
 for movie_folder in movie_folders:
-    os.chdir('./'+movie_folder)
+    os.chdir('./' + movie_folder)
     files = os.listdir()
     movie = None
     filepath = None
+    # DB에 영화가 존재한다면 return
+    if db.checkMovieByE_title(movie_folder):
+        break
+    # 폴더 순회하며 자막파일과 영화 데이터 가져옴
     for file in files:
         if file.find(".srt") > -1:
             # 파일 이름으로 영화 정보 가져옴
-            movie = fileOpen(file)
-            # 영화 자막 파일 분리
-            captionInfoList = movie.captionInfoList
-            # 자막 길이별로 정렬
-            captionInfoList.sort(key=lambda x: len(x.caption))
-        else:
+            movie = getMovieObject(file)
+        elif file.find(".webm") > -1:
             filepath = os.getcwd() + '/' + file
             filepath = filepath.replace('\\', '/')
     movie.filepath = filepath
+    # 썸네일 이미지 추출
+    makeStillCutImage(movie)
     insertMovie(movie, db)
     os.chdir('../')
 db.dbClose()
