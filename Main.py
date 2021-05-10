@@ -102,7 +102,7 @@ def insertMovie(movie, db):
             captionInfo.endSecond) + "] - " + captionInfo.caption)
 
 
-def makeStillCutImage(movie, onlyMainStillCut=False):
+def makeStillCutImage(movie, movie_folder_name ,onlyMainStillCut=False):
     # 영화 객체 가져오기
     videoObj = cv2.VideoCapture(movie.filepath)
 
@@ -122,7 +122,7 @@ def makeStillCutImage(movie, onlyMainStillCut=False):
         # 썸네일 저장
         cv2.imwrite("./thumbnail/%d.jpg" % frameCount, resizeImage)
         # 자막 정보에 썸네일 경로 입력
-        captionInfo.thumbnail = (os.getcwd() + "/thumbnail/" + str(frameCount) + ".jpg").replace("\\", "/")
+        captionInfo.thumbnail = (movie_folder_name + "/thumbnail/" + str(frameCount) + ".jpg")
         frameCount += 1
 
     return movie
@@ -156,7 +156,7 @@ for movie_folder in movie_folders:
             filepath = filepath.replace('\\', '/')
     movie.filepath = filepath
     # 썸네일 이미지 추출
-    makeStillCutImage(movie)
+    makeStillCutImage(movie, movie_folder)
     insertMovie(movie, db)
     os.chdir('../')
 db.dbClose()
